@@ -1,0 +1,107 @@
+
+select * from survey limit 10;
+
+
+select count(distinct user_id) from survey;
+select question, count(distinct user_id) from survey group by 1;
+
+
+select * from quiz limit 5;
+select * from home_try_on limit 5;
+select * from purchase limit 5;
+
+
+select quiz.user_id, case 
+when home_try_on.user_id is null then 'False'
+else 'True' end as is_home_try_on, home_try_on.number_of_pairs,
+case
+when purchase.user_id is null then 'False' 
+else 'True' end as is_purchased
+from quiz left join home_try_on on quiz.user_id = home_try_on.user_id left join purchase on quiz.user_id = purchase.user_id limit 10;
+
+
+with number_of_pairs_data as (select quiz.user_id, case 
+when home_try_on.user_id is null then 'False'
+else 'True' end as is_home_try_on,
+home_try_on.number_of_pairs,   
+case
+when purchase.user_id is null then 0 
+else 1 end as is_purchased
+from quiz left join home_try_on on quiz.user_id = home_try_on.user_id left join purchase on quiz.user_id = purchase.user_id)
+
+select is_home_try_on, number_of_pairs, count(is_home_try_on) as number_users,
+sum(is_purchased) as number_is_purchased 
+from number_of_pairs_data group by 1, 2 order by 1,2;
+
+
+
+with gender_data as 
+(select quiz.user_id, quiz.style, case 
+when home_try_on.user_id is null then 'False'
+else 'True' end as is_home_try_on,
+home_try_on.number_of_pairs,   
+case
+when purchase.user_id is null then 0 
+else 1 end as is_purchased
+from quiz left join home_try_on on quiz.user_id = home_try_on.user_id left join purchase on quiz.user_id = purchase.user_id)
+
+select style, is_home_try_on,  
+number_of_pairs, count(is_home_try_on) as number_users,
+sum(is_purchased) as number_is_purchased 
+from gender_data group by 1,2,3;
+
+
+with fit_data as 
+(select quiz.user_id, quiz.fit, case 
+when home_try_on.user_id is null then 'False'
+else 'True' end as is_home_try_on, 
+case
+when purchase.user_id is null then 0 
+else 1 end as is_purchased
+from quiz left join home_try_on on quiz.user_id = home_try_on.user_id left join purchase on quiz.user_id = purchase.user_id)
+
+select fit, is_home_try_on,  
+count(is_home_try_on) as number_users,
+sum(is_purchased) as number_is_purchased 
+from fit_data group by 1,2;
+
+
+with shape_data as 
+(select quiz.user_id, quiz.shape, case 
+when home_try_on.user_id is null then 'False'
+else 'True' end as is_home_try_on,   
+case
+when purchase.user_id is null then 0 
+else 1 end as is_purchased
+from quiz left join home_try_on on quiz.user_id = home_try_on.user_id left join purchase on quiz.user_id = purchase.user_id)
+
+select shape, is_home_try_on,  
+count(is_home_try_on) as number_users,
+sum(is_purchased) as number_is_purchased 
+from shape_data group by 1,2;
+
+
+with color_data as 
+(select quiz.user_id, quiz.color, case 
+when home_try_on.user_id is null then 'False'
+else 'True' end as is_home_try_on,   
+case
+when purchase.user_id is null then 0 
+else 1 end as is_purchased
+from quiz left join home_try_on on quiz.user_id = home_try_on.user_id left join purchase on quiz.user_id = purchase.user_id)
+
+select color, is_home_try_on,  
+count(is_home_try_on) as number_users,
+sum(is_purchased) as number_is_purchased 
+from color_data group by 1,2;
+
+
+
+select fit, count(*) from quiz group by 1 order by 2 desc;
+select shape, count(*) from quiz group by 1 order by 2 desc;
+select color, count(*) from quiz group by 1 order by 2 desc;
+
+
+select model_name, count(*) from purchase group by 1 order by 2 desc;
+select color, count(*) from purchase group by 1 order by 2 desc;
+select style, price, count(*) from purchase group by 1, 2;
