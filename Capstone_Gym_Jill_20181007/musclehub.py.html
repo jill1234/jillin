@@ -1,0 +1,568 @@
+
+# coding: utf-8
+
+# # Capstone Project 1: MuscleHub AB Test
+
+# ## Step 1: Get started with SQL
+
+# Like most businesses, Janet keeps her data in a SQL database.  Normally, you'd download the data from her database to a csv file, and then load it into a Jupyter Notebook using Pandas.
+# 
+# For this project, you'll have to access SQL in a slightly different way.  You'll be using a special Codecademy library that lets you type SQL queries directly into this Jupyter notebook.  You'll have pass each SQL query as an argument to a function called `sql_query`.  Each query will return a Pandas DataFrame.  Here's an example:
+
+# In[1]:
+
+
+# This import only needs to happen once, at the beginning of the notebook
+from codecademySQL import sql_query
+
+
+# In[2]:
+
+
+# Here's an example of a query that just displays some data
+sql_query('''
+SELECT *
+FROM visits
+LIMIT 5
+''')
+
+
+# In[3]:
+
+
+# Here's an example where we save the data to a DataFrame
+df = sql_query('''
+SELECT *
+FROM applications
+LIMIT 5
+''')
+
+
+# ## Step 2: Get your dataset
+
+# Let's get started!
+# 
+# Janet of MuscleHub has a SQLite database, which contains several tables that will be helpful to you in this investigation:
+# - `visits` contains information about potential gym customers who have visited MuscleHub
+# - `fitness_tests` contains information about potential customers in "Group A", who were given a fitness test
+# - `applications` contains information about any potential customers (both "Group A" and "Group B") who filled out an application.  Not everyone in `visits` will have filled out an application.
+# - `purchases` contains information about customers who purchased a membership to MuscleHub.
+# 
+# Use the space below to examine each table.
+
+# In[4]:
+
+
+# Examine visits here
+from codecademySQL import sql_query
+sql_query('''
+SELECT *
+FROM visits
+LIMIT 5
+''')
+
+
+# In[5]:
+
+
+# Examine fitness_tests here
+sql_query('''
+SELECT *
+FROM fitness_tests
+LIMIT 5
+''')
+
+
+# In[6]:
+
+
+# Examine applications here
+sql_query('''
+SELECT *
+FROM applications
+LIMIT 5
+''')
+
+
+# In[7]:
+
+
+# Examine purchases here
+sql_query('''
+SELECT *
+FROM purchases
+LIMIT 5
+''')
+
+
+# We'd like to download a giant DataFrame containing all of this data.  You'll need to write a query that does the following things:
+# 
+# 1. Not all visits in  `visits` occurred during the A/B test.  You'll only want to pull data where `visit_date` is on or after `7-1-17`.
+# 
+# 2. You'll want to perform a series of `LEFT JOIN` commands to combine the four tables that we care about.  You'll need to perform the joins on `first_name`, `last_name`, and `email`.  Pull the following columns:
+# 
+# 
+# - `visits.first_name`
+# - `visits.last_name`
+# - `visits.gender`
+# - `visits.email`
+# - `visits.visit_date`
+# - `fitness_tests.fitness_test_date`
+# - `applications.application_date`
+# - `purchases.purchase_date`
+# 
+# Save the result of this query to a variable called `df`.
+# 
+# Hint: your result should have 5004 rows.  Does it?
+
+# In[8]:
+
+
+#Create a dataframe of combining the above four tables
+df = sql_query('''
+SELECT visits.first_name,
+       visits.last_name,
+       visits.gender,
+       visits.email,
+       visits.visit_date,
+       fitness_tests.fitness_test_date,
+       applications.application_date,
+       purchases.purchase_date
+FROM visits
+LEFT JOIN fitness_tests
+    ON fitness_tests.first_name = visits.first_name
+    AND fitness_tests.last_name = visits.last_name
+    AND fitness_tests.email = visits.email
+LEFT JOIN applications
+    ON applications.first_name = visits.first_name
+    AND applications.last_name = visits.last_name
+    AND applications.email = visits.email
+LEFT JOIN purchases
+    ON purchases.first_name = visits.first_name
+    AND purchases.last_name = visits.last_name
+    AND purchases.email = visits.email
+WHERE visits.visit_date >= '7-1-17'
+''')
+
+
+# ## Step 3: Investigate the A and B groups
+
+# We have some data to work with! Import the following modules so that we can start doing analysis:
+# - `import pandas as pd`
+# - `from matplotlib import pyplot as plt`
+
+# In[9]:
+
+
+import pandas as pd
+from matplotlib import pyplot as plt
+import matplotlib.font_manager as font_manage
+
+
+# We're going to add some columns to `df` to help us with our analysis.
+# 
+# Start by adding a column called `ab_test_group`.  It should be `A` if `fitness_test_date` is not `None`, and `B` if `fitness_test_date` is `None`.
+
+# In[10]:
+
+
+#Add a column called ab_test_group into df
+df['is_a_test'] = ~df.fitness_test_date.isnull() 
+df['ab_test_group'] = df.is_a_test.apply(lambda x : 'A' if x == True else 'B')
+print df.head()
+
+
+# Let's do a quick sanity check that Janet split her visitors such that about half are in A and half are in B.
+# 
+# Start by using `groupby` to count how many users are in each `ab_test_group`.  Save the results to `ab_counts`.
+
+# In[11]:
+
+
+#Calculate the counts of A/B test
+ab_counts = df.groupby('ab_test_group').first_name.count().reset_index()
+ab_counts
+
+
+# We'll want to include this information in our presentation.  Let's create a pie cart using `plt.pie`.  Make sure to include:
+# - Use `plt.axis('equal')` so that your pie chart looks nice
+# - Add a legend labeling `A` and `B`
+# - Use `autopct` to label the percentage of each group
+# - Save your figure as `ab_test_pie_chart.png`
+
+# In[12]:
+
+
+#Plot a pie chart which illustrates the distribution of A/B test  
+plt.figure(figsize = (6,4))
+plt.pie(ab_counts.first_name.values,  autopct='%0.2f%%')
+plt.axis('equal')
+label = ['A', 'B']
+plt.legend(label)
+plt.show()
+plt.savefig('ab_test_pie_chart.png')
+
+
+# ## Step 4: Who picks up an application?
+
+# Recall that the sign-up process for MuscleHub has several steps:
+# 1. Take a fitness test with a personal trainer (only Group A)
+# 2. Fill out an application for the gym
+# 3. Send in their payment for their first month's membership
+# 
+# Let's examine how many people make it to Step 2, filling out an application.
+# 
+# Start by creating a new column in `df` called `is_application` which is `Application` if `application_date` is not `None` and `No Application`, otherwise.
+
+# In[13]:
+
+
+#Add a column called is_application into df
+df['application'] = ~df.application_date.isnull()
+df['is_application'] = df.application.apply(lambda x : 'Application' if x == True else 'No Application' )
+print df.head()
+
+
+# Now, using `groupby`, count how many people from Group A and Group B either do or don't pick up an application.  You'll want to group by `ab_test_group` and `is_application`.  Save this new DataFrame as `app_counts`
+
+# In[14]:
+
+
+#Calculate the number of visitors tested whether or not to fill out a application for A/B test
+app_counts = df.groupby(['ab_test_group', 'is_application']).first_name.count().reset_index()
+print app_counts
+
+
+# We're going to want to calculate the percent of people in each group who complete an application.  It's going to be much easier to do this if we pivot `app_counts` such that:
+# - The `index` is `ab_test_group`
+# - The `columns` are `is_application`
+# Perform this pivot and save it to the variable `app_pivot`.  Remember to call `reset_index()` at the end of the pivot!
+
+# In[15]:
+
+
+#Pivot the dataframe called app_counts to become app_pivot
+app_pivot = app_counts.pivot(columns = 'is_application', index = 'ab_test_group', values = 'first_name').reset_index()
+app_pivot
+
+
+# Define a new column called `Total`, which is the sum of `Application` and `No Application`.
+
+# In[16]:
+
+
+#Add a column called Total into app_pivot
+app_pivot['Total'] = app_pivot['Application'] + app_pivot['No Application']
+app_pivot
+
+
+# Calculate another column called `Percent with Application`, which is equal to `Application` divided by `Total`.
+
+# In[17]:
+
+
+#Add a column called Percent with Application into app_pivot
+app_pivot['Percent with Application'] = 100 * app_pivot['Application'] / app_pivot['Total']
+app_pivot
+
+
+# It looks like more people from Group B turned in an application.  Why might that be?
+# 
+# We need to know if this difference is statistically significant.
+# 
+# Choose a hypothesis tests, import it from `scipy` and perform it.  Be sure to note the p-value.
+# Is this result significant?
+
+# In[18]:
+
+
+#Perform a hypothesis test of chi square test for examining the significance of  A/B test
+from scipy.stats import chi2_contingency
+app_pivot_table = [[250,2254], [325,2175]]
+_, pvalue, _, _ = chi2_contingency(app_pivot_table)
+print pvalue
+
+
+# ## Step 4: Who purchases a membership?
+
+# Of those who picked up an application, how many purchased a membership?
+# 
+# Let's begin by adding a column to `df` called `is_member` which is `Member` if `purchase_date` is not `None`, and `Not Member` otherwise.
+
+# In[19]:
+
+
+#Add a column called is_member into df
+df['purchased'] = ~df.purchase_date.isnull()
+df['is_member'] = df.purchased.apply(lambda x : 'Member' if x == True else 'Not Member')
+print df.drop(['is_a_test', 'application', 'purchased'], axis = 1).head()
+
+
+# Now, let's create a DataFrame called `just_apps` the contains only people who picked up an application.
+
+# In[20]:
+
+
+#Create a dataframe of only containing people who picked up a application  
+just_apps = df[df.is_application == 'Application' ]
+print len(just_apps)
+
+
+# Great! Now, let's do a `groupby` to find out how many people in `just_apps` are and aren't members from each group.  Follow the same process that we did in Step 4, including pivoting the data.  You should end up with a DataFrame that looks like this:
+# 
+# |is_member|ab_test_group|Member|Not Member|Total|Percent Purchase|
+# |-|-|-|-|-|-|
+# |0|A|?|?|?|?|
+# |1|B|?|?|?|?|
+# 
+# Save your final DataFrame as `member_pivot`.
+
+# In[21]:
+
+
+#Create a dataframe called member_pivot
+member_pivot = just_apps.groupby(['ab_test_group', 'is_member']).first_name.count().reset_index()   .pivot(columns = 'is_member', index = 'ab_test_group', values = 'first_name').reset_index()
+member_pivot['Total'] = member_pivot['Member'] + member_pivot['Not Member']
+member_pivot['Percent Purchase'] = 100 * member_pivot['Member'] / member_pivot['Total']
+member_pivot
+
+
+# It looks like people who took the fitness test were more likely to purchase a membership **if** they picked up an application.  Why might that be?
+# 
+# Just like before, we need to know if this difference is statistically significant.  Choose a hypothesis tests, import it from `scipy` and perform it.  Be sure to note the p-value.
+# Is this result significant?
+
+# In[22]:
+
+
+#Perform a hypothesis test of chi square test for examining the significance of  A/B test that people have picked up a application
+from scipy.stats import chi2_contingency
+member_pivot_table = [[200,50], [250,75]]
+_, m_pvalue, _, _ = chi2_contingency(member_pivot_table)
+print m_pvalue
+
+
+# Previously, we looked at what percent of people **who picked up applications** purchased memberships.  What we really care about is what percentage of **all visitors** purchased memberships.  Return to `df` and do a `groupby` to find out how many people in `df` are and aren't members from each group.  Follow the same process that we did in Step 4, including pivoting the data.  You should end up with a DataFrame that looks like this:
+# 
+# |is_member|ab_test_group|Member|Not Member|Total|Percent Purchase|
+# |-|-|-|-|-|-|
+# |0|A|?|?|?|?|
+# |1|B|?|?|?|?|
+# 
+# Save your final DataFrame as `final_member_pivot`.
+
+# In[23]:
+
+
+#Create a dataframe called final_member_pivot
+final_member_pivot = df.groupby(['ab_test_group', 'is_member']).first_name.count().reset_index()   .pivot(columns = 'is_member', index = 'ab_test_group', values = 'first_name').reset_index()
+final_member_pivot['Total'] = final_member_pivot['Member'] + final_member_pivot['Not Member']
+final_member_pivot['Percent Purchase'] = 100 * final_member_pivot['Member'] / final_member_pivot['Total']
+final_member_pivot
+
+
+# Previously, when we only considered people who had **already picked up an application**, we saw that there was no significant difference in membership between Group A and Group B.
+# 
+# Now, when we consider all people who **visit MuscleHub**, we see that there might be a significant different in memberships between Group A and Group B.  Perform a significance test and check.
+
+# In[24]:
+
+
+#Perform a hypothesis test of chi square test for examining the significance of  A/B test about all visitors
+from scipy.stats import chi2_contingency
+final_member_pivot_table = [[200,2304], [250,2250]]
+_, f_pvalue, _, _ = chi2_contingency(final_member_pivot_table)
+print f_pvalue
+
+
+# ## Step 5: Summarize the acquisition funel with a chart
+
+# We'd like to make a bar chart for Janet that shows the difference between Group A (people who were given the fitness test) and Group B (people who were not given the fitness test) at each state of the process:
+# - Percent of visitors who apply
+# - Percent of applicants who purchase a membership
+# - Percent of visitors who purchase a membership
+# 
+# Create one plot for **each** of the three sets of percentages that you calculated in `app_pivot`, `member_pivot` and `final_member_pivot`.  Each plot should:
+# - Label the two bars as `Fitness Test` and `No Fitness Test`
+# - Make sure that the y-axis ticks are expressed as percents (i.e., `5%`)
+# - Have a title
+
+# In[33]:
+
+
+#Plot a bar chart of visitors who apply for A/B test
+plt.figure(figsize = (6,4))
+plt.bar(range(len(app_pivot.ab_test_group)), app_pivot['Percent with Application'])
+ax = plt.subplot()
+ax.set_xticks(range(2))
+ax.set_xticklabels(['Fitness Test', 'No Fitness Test'])
+ax.set_yticks([0,5,10,15])
+ax.set_ylabel('Percent (%)')
+plt.title('The Percent of Visitors who Apply')
+plt.show()
+
+
+# In[26]:
+
+
+#Plot a bar chart of applicants who purchase a membership for A/B test
+plt.figure(figsize = (6,4))
+plt.bar(range(len(member_pivot.ab_test_group)), member_pivot['Percent Purchase'])
+ax = plt.subplot()
+ax.set_xticks(range(len(member_pivot.ab_test_group)))
+ax.set_xticklabels(['Fitness Test', 'No Fitness Test'])
+ax.set_yticks([0,40,80,])
+ax.set_ylabel('Percent (%)')
+plt.title('The Percent of Applicants who Purcahse a Membership')
+plt.show()
+
+
+# In[27]:
+
+
+#Plot a bar chart of visitors who purchase a membership for A/B test
+plt.figure(figsize = (6,4))
+plt.bar(range(len(final_member_pivot.ab_test_group)), final_member_pivot['Percent Purchase'])
+ax = plt.subplot()
+ax.set_xticks(range(len(final_member_pivot.ab_test_group)))
+ax.set_xticklabels(['Fitness Test', 'No Fitness Test'])
+ax.set_yticks([0,4,8,12])
+ax.set_ylabel('Percent (%)')
+plt.title('The Percent of Visitors who Purcahse a Membership')
+plt.show()
+
+
+# In[28]:
+
+
+#Plot a bar stacked chart of visitors who purchase a membership for A/B test via funnel analysis
+import numpy as np
+just_applicants = app_pivot['Application'] - member_pivot['Member']
+plt.figure(figsize = (6,4))
+plt.bar(range(len(app_pivot)), app_pivot['No Application'].values)
+plt.bar(range(len(app_pivot)), just_applicants.values, bottom = app_pivot['No Application'].values)
+member_bottom = np.add(app_pivot['No Application'].values, just_applicants.values)
+plt.bar(range(len(app_pivot)), member_pivot['Member'].values, bottom = member_bottom)
+ax = plt.subplot()
+# Set the font dictionaries (for plot title and axis titles)
+title_font = {'fontname':'Arial', 'size':'11', 'color':'black', 'weight':'normal'}
+ax.set_xticks(range(2))
+ax.set_xticklabels(['Fitness Test', 'No Fitness Test'], title_font)
+ax.set_ylabel('The Number of People', title_font)
+plt.title('The Distribution of the Number of People from Visitors to Membership', title_font)
+plt.legend(["Just Visitors","Just Applicants", "Members"], loc = 8)
+plt.show()
+plt.savefig('stacked_bar.png')
+
+
+# In[29]:
+
+
+#Calculate the number of visitors grouped According to Gender and Funnel Stages
+a_counts = df[df.ab_test_group == 'A']
+b_counts = df[df.ab_test_group == 'B']
+a_app_gender = a_counts.groupby(['gender', 'is_application']).first_name.count().reset_index()
+a_app_gender_pivot = a_app_gender.pivot(columns = 'is_application', index = 'gender', values = 'first_name')
+a_member_gender = a_counts.groupby(['gender', 'is_member']).first_name.count().reset_index()
+a_member_gender_pivot = a_member_gender.pivot(columns = 'is_member', index = 'gender', values = 'first_name')
+a_just_gender_applicants = a_app_gender_pivot['Application'] - a_member_gender_pivot['Member']
+b_app_gender = b_counts.groupby(['gender', 'is_application']).first_name.count().reset_index()
+b_app_gender_pivot = b_app_gender.pivot(columns = 'is_application', index = 'gender', values = 'first_name')
+b_member_gender = b_counts.groupby(['gender', 'is_member']).first_name.count().reset_index()
+b_member_gender_pivot = b_member_gender.pivot(columns = 'is_member', index = 'gender', values = 'first_name')
+b_just_gender_applicants = b_app_gender_pivot['Application'] - b_member_gender_pivot['Member']
+print a_app_gender_pivot
+print a_member_gender_pivot
+print b_app_gender_pivot
+print b_member_gender_pivot
+print a_just_gender_applicants
+print b_just_gender_applicants
+
+
+# In[30]:
+
+
+#Plot a bar stacked chart of visitors' distributions for A/B test via funnel analysis
+import numpy as np
+n = 1  # This is our first dataset (female)
+t = 2 # Number of datasets
+d = 2 # Number of sets of bars
+w = 0.8 # Width of each bar
+f = [t*element + 0.8*n for element in range(d)]
+plt.figure(figsize = (6,4))
+# Set the font dictionaries (for plot title and axis titles)
+title_font = {'fontname':'Arial', 'size':'13', 'color':'black', 'weight':'normal'}
+f_just_visitors = [1140, 1139]
+f_just_applicants = [19,37]
+f_members = [96,133]
+f_member_bottom = np.add(f_just_visitors, f_just_applicants)
+plt.bar(f, f_just_visitors)
+plt.bar(f, f_just_applicants, bottom = f_just_visitors)
+plt.bar(f, f_members , bottom = f_member_bottom)
+n = 2  # This is our second dataset (male)
+t = 2 # Number of datasets
+d = 2 # Number of sets of bars
+w = 0.8 # Width of each bar
+m = [t*element + 0.8*n for element in range(d)]
+m_just_visitors = [1114, 1036]
+m_just_applicants = [31,38]
+m_members = [104,117]
+m_member_bottom = np.add(m_just_visitors, m_just_applicants)
+plt.bar(m, m_just_visitors)
+plt.bar(m, m_just_applicants, bottom = m_just_visitors)
+plt.bar(m, m_members , bottom = m_member_bottom)
+ax = plt.subplot()
+ax.set_xticks([1.2, 3.2])
+#ax.set_xticks([0.8, 1.6, 2.8, 3.6])
+ax.set_xticklabels(['Fitness Test','No Fitness Test'], title_font)
+ax.set_ylabel('The Number of People', title_font)
+plt.title('The Distribution of the Number of People Grouped by Gender from Visitors to Membership', title_font)
+plt.legend(["Female Just Visitors","Female Just Applicants", "Female Members", "Male Just Visitors","Male Just Applicants", "Male Members"], loc = 8)
+plt.show()
+
+
+# In[31]:
+
+
+#Perform a hypothesis test of chi square test for examining the significance of gender in the same group
+a_app_member_table = [[96,115],[104,135]]
+b_app_member_table = [[133,170],[117,155]]
+_, a_gender_app_pvalue, _, _ = chi2_contingency(a_app_gender_pivot.values)
+_, a_gender_member_pvalue, _, _ = chi2_contingency(a_member_gender_pivot.values)
+_, a_app_member_pvalue, _, _ = chi2_contingency(a_app_member_table)
+_, b_gender_app_pvalue, _, _ = chi2_contingency(b_app_gender_pivot.values)
+_, b_gender_member_pvalue, _, _ = chi2_contingency(b_member_gender_pivot.values)
+_, b_app_member_pvalue, _, _ = chi2_contingency(b_app_member_table)
+
+print a_gender_app_pvalue
+print a_gender_member_pvalue
+print a_app_member_pvalue
+print b_gender_app_pvalue
+print b_gender_member_pvalue
+print b_app_member_pvalue
+
+
+# In[32]:
+
+
+#Perform a hypothesis test of chi square test for examining the significance of gender aross groups
+female_app_table = [[115,1140],[170,1139]]
+male_app_table = [[135,1114],[155,1036]]
+female_member_table = [[96,1159],[133,1176]]
+male_member_table = [[104,1145],[117,1074]]
+female_app_member_table = [[96,115],[133,170]]
+male_app_member_table = [[104,135],[117,155]]
+_, female_app_pvalue, _, _ = chi2_contingency(female_app_table)
+_, male_app_pvalue, _, _ = chi2_contingency(male_app_table)
+_, female_member_pvalue, _, _ = chi2_contingency(female_member_table)
+_, male_member_pvalue, _, _ = chi2_contingency(male_member_table)
+_, f_app_member_pvalue, _, _ = chi2_contingency(female_app_member_table)
+_, m_app_member_pvalue, _, _ = chi2_contingency(male_app_member_table)
+
+print female_app_pvalue
+print male_app_pvalue
+print female_member_pvalue
+print male_member_pvalue
+print f_app_member_pvalue
+print m_app_member_pvalue
+
